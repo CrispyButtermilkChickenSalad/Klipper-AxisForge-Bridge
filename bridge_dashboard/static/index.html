@@ -18,14 +18,14 @@
       </div>
     </header>
     <nav class="tool-tabs" aria-label="Dashboard and connected tools">
-      <a class="tool-tab active" href="/" aria-current="page">Dashboard</a>
+      <a id="dashboard-tab" class="tool-tab active" href="/" aria-current="page">Dashboard</a>
       <a id="printer-ui-placeholder" class="tool-tab unavailable" href="#" aria-disabled="true">Fluidd / Mainsail</a>
-      <a id="fluidd-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Fluidd ↗</a>
-      <a id="mainsail-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Mainsail ↗</a>
-      <a id="alps-link" class="tool-tab external" target="_blank" rel="noopener noreferrer">ALPS Logger ↗</a>
+      <a id="fluidd-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Fluidd</a>
+      <a id="mainsail-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Mainsail</a>
+      <a id="alps-link" class="tool-tab external" href="https://crispybuttermilkchickensalad.github.io/ALPS-logger/" target="_blank" rel="noopener noreferrer">ALPS Logger</a>
     </nav>
 
-    <main>
+    <main id="dashboard-view">
       <section class="card workflow-card" aria-label="G-code execution workflow">
         <div class="workflow-title">
           <h2>G-code job pipeline</h2>
@@ -123,6 +123,14 @@
         <p id="safety-message" class="inline-message" role="status"></p>
       </section>
     </main>
+    <section id="embedded-view" class="embedded-view" aria-label="Connected tool" hidden>
+      <div class="embedded-heading">
+        <h2 id="embedded-title"></h2>
+        <a id="embedded-external" class="button secondary" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
+      </div>
+      <p id="embedded-message" class="muted" role="status"></p>
+      <div id="embedded-frames"></div>
+    </section>
     <footer>Keep the UR pendant and physical E-stop accessible.</footer>
     <script src="/static/app.js" defer></script>
   </body>

@@ -31,6 +31,12 @@ h2 { margin-bottom: 0; font-size: 1.15rem; letter-spacing: -.02em; }
 .tool-tab.external { color: #c4d2e5; }
 .tool-tab[hidden] { display: none; }
 main { width: min(1180px, calc(100% - 40px)); margin: 28px auto; }
+.embedded-view { width: min(1180px, calc(100% - 40px)); margin: 28px auto; }
+.embedded-view[hidden], .tool-frame[hidden] { display: none; }
+.embedded-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.embedded-heading a { text-decoration: none; }
+.embedded-view .muted { margin: 12px 0; }
+.tool-frame { display: block; width: 100%; height: max(500px, calc(100vh - 235px)); border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .grid { display: grid; gap: 16px; }
 .status-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 18px; }
 .controls-grid { grid-template-columns: 1fr 1fr; align-items: start; }

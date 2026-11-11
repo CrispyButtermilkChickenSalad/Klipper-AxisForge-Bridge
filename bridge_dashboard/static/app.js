@@ -122,6 +122,66 @@ async function loadLinks() {
   }
 }
 
+const toolFrames = new Map();
+const toolTabs = [
+  byId("dashboard-tab"),
+  byId("printer-ui-placeholder"),
+  byId("fluidd-link"),
+  byId("mainsail-link"),
+  byId("alps-link"),
+];
+
+function selectTab(tab) {
+  for (const item of toolTabs) {
+    item.classList.toggle("active", item === tab);
+    if (item === tab) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  }
+}
+
+byId("dashboard-tab").addEventListener("click", (event) => {
+  event.preventDefault();
+  selectTab(event.currentTarget);
+  byId("dashboard-view").hidden = false;
+  byId("embedded-view").hidden = true;
+});
+
+for (const tab of toolTabs.slice(1)) {
+  tab.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (tab.getAttribute("aria-disabled") === "true" || !tab.href || tab.hidden) return;
+
+    selectTab(tab);
+    byId("dashboard-view").hidden = true;
+    byId("embedded-view").hidden = false;
+    byId("embedded-title").textContent = tab.textContent.replace("↗", "").trim();
+    byId("embedded-external").href = tab.href;
+    for (const frame of toolFrames.values()) frame.hidden = true;
+
+    const url = new URL(tab.href);
+    if (location.protocol === "https:" && url.protocol === "http:") {
+      byId("embedded-message").textContent =
+        "An HTTPS page cannot embed an HTTP tool. Open it in a new tab or use HTTPS.";
+      return;
+    }
+
+    byId("embedded-message").textContent =
+      "If the tool cannot be displayed or a device permission fails, open it in a new tab.";
+    let frame = toolFrames.get(tab.id);
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.className = "tool-frame";
+      frame.title = byId("embedded-title").textContent;
+      if (tab.id === "alps-link") frame.allow = "serial";
+      frame.src = url.href;
+      byId("embedded-frames").append(frame);
+      toolFrames.set(tab.id, frame);
+    }
+    frame.hidden = false;
+  });
+}
+
 byId("start-job").addEventListener("click", async () => {
   showMessage("job-message", "");
   const job = byId("job-select").value;
