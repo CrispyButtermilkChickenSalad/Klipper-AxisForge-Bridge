@@ -122,6 +122,175 @@ async function loadLinks() {
   }
 }
 
+const chartColors = ["#c9a7ff", "#58a6ff", "#4ade80", "#fbbf24", "#fb7185", "#22d3ee"];
+let temperatureHistory = {};
+let temperatureColors = new Map();
+let telemetryInFlight = false;
+
+function percentage(value) {
+  return Number.isFinite(value) ? `${(value * 100).toFixed(0)}%` : "Unavailable";
+}
+
+function temperature(value) {
+  return Number.isFinite(value) ? `${value.toFixed(1)} °C` : "Unavailable";
+}
+
+function renderTelemetryList(id, entries, emptyMessage = "None reported", colors = new Map()) {
+  const list = byId(id);
+  list.replaceChildren();
+  if (!entries.length) {
+    const row = document.createElement("div");
+    const label = document.createElement("dt");
+    label.textContent = emptyMessage;
+    row.append(label);
+    list.append(row);
+    return;
+  }
+  for (const [name, value] of entries) {
+    const row = document.createElement("div");
+    const label = document.createElement("dt");
+    const detail = document.createElement("dd");
+    if (colors.has(name)) {
+      const marker = document.createElement("span");
+      marker.className = "sensor-color";
+      marker.style.backgroundColor = colors.get(name);
+      marker.setAttribute("aria-hidden", "true");
+      label.append(marker);
+    }
+    label.append(document.createTextNode(name));
+    detail.textContent = value;
+    row.append(label, detail);
+    list.append(row);
+  }
+}
+
+function drawTemperatureHistory() {
+  const canvas = byId("temperature-chart");
+  const width = canvas.clientWidth;
+  if (!width) return;
+  const height = 200;
+  const scale = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  const series = Object.entries(temperatureHistory)
+    .filter(([, values]) => Array.isArray(values) && values.some(Number.isFinite));
+  if (!series.length) return;
+
+  const samples = series.flatMap(([, values]) => values.filter(Number.isFinite));
+  const min = Math.min(0, Math.floor(Math.min(...samples) / 10) * 10);
+  const max = Math.max(min + 10, Math.ceil(Math.max(...samples) / 10) * 10);
+  const left = 44, right = width - 12, top = 12, bottom = height - 20;
+  ctx.font = "11px sans-serif";
+  ctx.fillStyle = "#8b949e";
+  ctx.strokeStyle = "#30363d";
+  for (let i = 0; i <= 4; i++) {
+    const y = top + (bottom - top) * i / 4;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+    ctx.fillText(`${(max - (max - min) * i / 4).toFixed(0)}°`, 4, y + 4);
+  }
+  const longest = Math.max(...series.map(([, values]) => values.length), 2);
+  series.forEach(([name, values]) => {
+    ctx.strokeStyle = temperatureColors.get(name);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let active = false;
+    values.forEach((value, i) => {
+      if (!Number.isFinite(value)) {
+        active = false;
+        return;
+      }
+      const x = left + (right - left) * (longest - values.length + i) / (longest - 1);
+      const y = bottom - (bottom - top) * (value - min) / (max - min);
+      if (active) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+      active = true;
+    });
+    ctx.stroke();
+  });
+}
+
+function renderHistory(history, error, sensorNames) {
+  const series = sensorNames
+    .filter((name) => Array.isArray(history[name]) && history[name].some(Number.isFinite));
+  temperatureHistory = Object.fromEntries(series.map((name) => [name, history[name]]));
+  temperatureColors = new Map(series.map((name, index) => [name, chartColors[index % chartColors.length]]));
+  byId("temperature-chart-message").textContent =
+    error || (series.length ? "" : "No temperature history available.");
+  byId("temperature-chart-message").className = `inline-message${error ? " error" : ""}`;
+  drawTemperatureHistory();
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = String(Math.floor(total % 3600 / 60)).padStart(2, "0");
+  return `${hours}:${minutes}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function renderPrintStats(data, metadataError) {
+  byId("print-status").textContent = [data.state || "Unavailable", data.filename]
+    .filter(Boolean).join(" · ");
+  byId("print-speed").textContent = Number.isFinite(data.velocity)
+    ? `${data.velocity.toFixed(1)} mm/s` : "—";
+  const flow = Number.isFinite(data.extruder_velocity) && Number.isFinite(data.filament_diameter)
+    && data.filament_diameter > 0
+    ? Math.max(0, data.extruder_velocity) * Math.PI * (data.filament_diameter / 2) ** 2 : null;
+  byId("print-flow").textContent = flow == null ? "—" : `${flow.toFixed(1)} mm³/s`;
+  byId("print-filament").textContent = Number.isFinite(data.filament_used)
+    ? `${data.filament_used.toFixed(2)} mm` : "—";
+  byId("print-layer").textContent = Number.isInteger(data.current_layer) && Number.isInteger(data.total_layer)
+    ? `${data.current_layer} of ${data.total_layer}` : "—";
+  const progress = data.progress;
+  const remaining = ["printing", "paused"].includes(data.state)
+    && Number.isFinite(progress) && progress >= 0.01 && progress < 1
+    && Number.isFinite(data.print_duration) && data.print_duration > 0
+    ? data.print_duration * (1 - progress) / progress : null;
+  byId("print-estimate").textContent = formatDuration(remaining);
+  byId("print-slicer").textContent = data.slicer_estimate > 0
+    ? formatDuration(data.slicer_estimate) : "—";
+  byId("print-total").textContent = formatDuration(data.total_duration);
+  byId("print-eta").textContent = remaining != null && data.state === "printing"
+    ? new Date(Date.now() + remaining * 1000).toLocaleTimeString() : "—";
+  byId("print-info-message").textContent = metadataError
+    ? `Slicer metadata unavailable: ${metadataError}` : "";
+  byId("print-info-message").className = `inline-message${metadataError ? " error" : ""}`;
+}
+
+async function refreshTelemetry() {
+  if (telemetryInFlight) return;
+  telemetryInFlight = true;
+  try {
+    const data = await request("/api/klipper/telemetry");
+    renderHistory(data.history, data.history_error, data.temperatures.map((item) => item.name));
+    renderTelemetryList("telemetry-temperatures", data.temperatures.map((item) => [
+      item.name,
+      item.target == null
+        ? temperature(item.temperature)
+        : `${temperature(item.temperature)} / ${temperature(item.target)} target`,
+    ]), "None reported", temperatureColors);
+    renderTelemetryList("telemetry-fans", data.fans.map((item) => [item.name, percentage(item.speed)]));
+    renderPrintStats(data.print, data.metadata_error);
+    byId("telemetry-message").textContent = "";
+    byId("telemetry-updated").textContent = `Updated ${new Date().toLocaleTimeString()} · refreshes every 5 seconds`;
+  } catch (error) {
+    renderTelemetryList("telemetry-temperatures", [], "Unavailable");
+    renderTelemetryList("telemetry-fans", [], "Unavailable");
+    renderPrintStats({}, null);
+    byId("telemetry-updated").textContent = "";
+    byId("telemetry-message").textContent = `Toolhead data unavailable: ${error.message}`;
+    byId("telemetry-message").className = "inline-message error";
+    renderHistory({}, "Temperature history unavailable.", []);
+  } finally {
+    telemetryInFlight = false;
+  }
+}
+
 const toolFrames = new Map();
 const toolTabs = [
   byId("dashboard-tab"),
@@ -144,6 +313,7 @@ byId("dashboard-tab").addEventListener("click", (event) => {
   selectTab(event.currentTarget);
   byId("dashboard-view").hidden = false;
   byId("embedded-view").hidden = true;
+  drawTemperatureHistory();
 });
 
 for (const tab of toolTabs.slice(1)) {
@@ -157,6 +327,7 @@ for (const tab of toolTabs.slice(1)) {
     byId("embedded-view").hidden = false;
     byId("embedded-title").textContent = tab.textContent.replace("↗", "").trim();
     byId("embedded-external").href = tab.href;
+    byId("printer-warning").hidden = tab.id === "alps-link";
     for (const frame of toolFrames.values()) frame.hidden = true;
 
     const url = new URL(tab.href);
@@ -250,4 +421,7 @@ byId("klipper-estop").addEventListener("click", async () => {
 loadJobs();
 loadLinks();
 refreshStatus();
+refreshTelemetry();
 window.setInterval(refreshStatus, 2000);
+window.setInterval(refreshTelemetry, 5000);
+window.addEventListener("resize", drawTemperatureHistory);

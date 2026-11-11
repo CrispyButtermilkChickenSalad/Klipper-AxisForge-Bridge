@@ -1,12 +1,19 @@
 # Klipper-ROS 2 Bridge
 
-This project provides a local dashboard for staging G-code for AxisForge and
-Klipper, checking ROS 2/Moonraker status, and opening Fluidd, Mainsail and ALPS
-Logger. Its experimental Klipper exporter is read-only.
+This project aims to synchronize G-code jobs between an AxisForge-controlled
+robot and a Klipper toolhead. The local dashboard currently stages the same
+file for both, shows read-only Klipper telemetry, and opens Fluidd, Mainsail
+and ALPS Logger. Its experimental Klipper exporter is read-only.
 
 **Synchronized robot/print execution is not implemented.** Uploading a file
 does not start a print, and the dashboard is not a safety system. Use physical
 emergency stops and stay with the machine.
+
+The bridge does not coordinate live parameter changes. Its toolhead telemetry
+cannot change heater targets, fans, macros, speed or extrusion factor. Fluidd
+and Mainsail can still control Klipper directly: reserve non-emergency changes
+there for when no print is running. Their controls are not blocked by this
+warning; use emergency stops whenever needed.
 
 The [GitHub Pages launcher](https://crispybuttermilkchickensalad.github.io/Klipper-ROS2-Bridge/)
 is a static links page, not a ROS 2 or machine-control server.

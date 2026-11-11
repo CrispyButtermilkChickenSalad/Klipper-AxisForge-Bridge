@@ -44,6 +44,17 @@
         </div>
       </section>
 
+      <section class="card upload-card" aria-label="Upload G-code">
+        <h2>Upload G-code</h2>
+        <p class="muted">Upload the original file to Klipper and stage it for AxisForge. Run the AxisForge planning check below to process it; uploading does not start a print.</p>
+        <form id="upload-form" class="upload-form">
+          <label for="gcode-upload">G-code file</label>
+          <input id="gcode-upload" name="file" type="file" accept=".gcode" required>
+          <button id="upload-job" class="button primary" type="submit">Upload to both</button>
+        </form>
+        <p id="upload-message" class="inline-message" role="status"></p>
+      </section>
+
       <section class="card queue-card" aria-label="Prepared jobs">
         <div class="card-heading">
           <h2>Ready jobs</h2>
@@ -86,6 +97,49 @@
         </article>
       </section>
 
+      <section class="card telemetry-card" aria-label="Read-only Klipper toolhead telemetry">
+        <div class="card-heading">
+          <div>
+            <h2>Klipper toolhead</h2>
+            <p class="telemetry-subtitle">Read-only. Live changes are not synchronized with AxisForge.</p>
+            <p id="telemetry-updated" class="telemetry-subtitle"></p>
+          </div>
+          <span class="badge">Read only</span>
+        </div>
+        <p id="telemetry-message" class="inline-message" role="status">Loading toolhead data…</p>
+        <div class="telemetry-grid">
+          <div>
+            <h3>Temperatures and targets</h3>
+            <dl id="telemetry-temperatures" class="telemetry-list"></dl>
+          </div>
+          <div>
+            <h3>Fans</h3>
+            <dl id="telemetry-fans" class="telemetry-list"></dl>
+            <div class="print-summary">
+              <h3>Klipper print status</h3>
+              <p id="print-status" class="chart-caption">Loading…</p>
+              <div class="print-metrics">
+                <div title="Klipper toolhead speed; extrusion-only motion may report zero"><span>Speed</span><strong id="print-speed">—</strong></div>
+                <div><span>Flow</span><strong id="print-flow">—</strong></div>
+                <div><span>Filament</span><strong id="print-filament">—</strong></div>
+                <div><span>Layer</span><strong id="print-layer">—</strong></div>
+                <div title="Estimated remaining time from file progress"><span>Estimate</span><strong id="print-estimate">—</strong></div>
+                <div title="Total print time estimated by the slicer"><span>Slicer</span><strong id="print-slicer">—</strong></div>
+                <div title="Total elapsed time including preparation"><span>Total</span><strong id="print-total">—</strong></div>
+                <div><span>ETA</span><strong id="print-eta">—</strong></div>
+              </div>
+              <p id="print-info-message" class="inline-message" role="status"></p>
+            </div>
+          </div>
+        </div>
+        <div class="temperature-chart">
+          <h3>Temperature history</h3>
+          <p class="chart-caption">Up to 3 minutes · oldest to newest</p>
+          <canvas id="temperature-chart" height="200" role="img" aria-label="Recent temperatures in degrees Celsius"></canvas>
+          <p id="temperature-chart-message" class="inline-message" role="status"></p>
+        </div>
+      </section>
+
       <section class="grid controls-grid">
         <article class="card">
           <h2>AxisForge planning check</h2>
@@ -100,16 +154,6 @@
           <p id="job-message" class="inline-message" role="status"></p>
         </article>
 
-        <article class="card">
-          <h2>Upload G-code</h2>
-          <p class="muted">Upload once to Moonraker and stage the same file for AxisForge. Upload does not start a print.</p>
-          <form id="upload-form">
-            <label for="gcode-upload">G-code file</label>
-            <input id="gcode-upload" name="file" type="file" accept=".gcode" required>
-            <button id="upload-job" class="button primary" type="submit">Upload to both</button>
-          </form>
-          <p id="upload-message" class="inline-message" role="status"></p>
-        </article>
       </section>
 
       <section class="card safety-card">
@@ -129,6 +173,9 @@
         <a id="embedded-external" class="button secondary" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
       </div>
       <p id="embedded-message" class="muted" role="status"></p>
+      <p id="printer-warning" class="printer-warning" role="alert" hidden>
+        Reserve non-emergency changes in Fluidd/Mainsail for when no print is running. Live changes are not synchronized with AxisForge. This warning does not block the printer controls; use emergency stops whenever needed.
+      </p>
       <div id="embedded-frames"></div>
     </section>
     <footer>Keep the UR pendant and physical E-stop accessible.</footer>
