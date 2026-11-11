@@ -18,10 +18,16 @@ class FakeMoonraker:
         self.state = state
         self.uploads = []
         self.fail_upload = False
+        self.fail_telemetry = False
         self.stopped = False
 
     async def status(self):
         return {"connected": True, "state": self.state}
+
+    async def telemetry(self):
+        if self.fail_telemetry:
+            raise MoonrakerError("telemetry unavailable")
+        return {"print": {"state": "printing"}}
 
     async def upload_gcode(self, filename, local_path):
         if self.fail_upload:
@@ -159,6 +165,15 @@ class DashboardApiTests(unittest.TestCase):
             json={"heater": "extruder", "target": 200},
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_read_only_telemetry_and_failure(self):
+        response = self.client.get("/api/klipper/telemetry")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["print"]["state"], "printing")
+        self.moonraker.fail_telemetry = True
+        response = self.client.get("/api/klipper/telemetry")
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("telemetry unavailable", response.json()["detail"])
 
     def test_failed_moonraker_upload_removes_staged_file(self):
         self.moonraker.fail_upload = True

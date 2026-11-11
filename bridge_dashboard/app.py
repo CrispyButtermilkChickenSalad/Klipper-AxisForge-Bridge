@@ -61,6 +61,13 @@ def create_app(settings=None):
             "axisforge": app.state.axisforge.status(),
         }
 
+    @app.get("/api/klipper/telemetry")
+    async def klipper_telemetry():
+        try:
+            return await app.state.moonraker.telemetry()
+        except MoonrakerError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
     @app.get("/api/jobs")
     async def jobs():
         return app.state.axisforge.list_jobs()
