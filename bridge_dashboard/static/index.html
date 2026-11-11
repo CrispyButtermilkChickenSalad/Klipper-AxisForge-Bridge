@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d1117">
+    <title>AxisForge + Klipper</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>AxisForge <span>×</span> Klipper</h1>
+      </div>
+      <div class="system-status" aria-live="polite">
+        <span id="overall-dot" class="dot"></span>
+        <span id="overall-state">Connecting…</span>
+      </div>
+    </header>
+    <nav class="tool-tabs" aria-label="Dashboard and connected tools">
+      <a class="tool-tab active" href="/" aria-current="page">Dashboard</a>
+      <a id="printer-ui-placeholder" class="tool-tab unavailable" href="#" aria-disabled="true">Fluidd / Mainsail</a>
+      <a id="fluidd-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Fluidd ↗</a>
+      <a id="mainsail-link" class="tool-tab external" target="_blank" rel="noopener noreferrer" hidden>Mainsail ↗</a>
+      <a id="alps-link" class="tool-tab external" target="_blank" rel="noopener noreferrer">ALPS Logger ↗</a>
+    </nav>
+
+    <main>
+      <section class="card workflow-card" aria-label="G-code execution workflow">
+        <div class="workflow-title">
+          <h2>G-code job pipeline</h2>
+          <span class="badge">Sync bridge unavailable</span>
+        </div>
+        <ol class="workflow-steps">
+          <li><span class="step-number">1</span><div><strong>Upload G-code</strong><p>Store on both systems</p></div></li>
+          <li><span class="step-number">2</span><div><strong>Klipper preflight</strong><p>Not implemented</p></div></li>
+          <li><span class="step-number">3</span><div><strong>Robot preflight</strong><p>Not implemented</p></div></li>
+          <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p>Unavailable</p></div></li>
+        </ol>
+        <p class="pipeline-note">G-code upload is available. Robot preflight and synchronized execution are still being built.</p>
+        <div class="calibration-row">
+          <div><strong>Timing calibration</strong><p>Requires Klipper-scheduled robot motion.</p></div>
+          <button class="button secondary" type="button" disabled>Unavailable</button>
+        </div>
+      </section>
+
+      <section class="card queue-card" aria-label="Prepared jobs">
+        <div class="card-heading">
+          <h2>Ready jobs</h2>
+          <span class="badge">Unavailable</span>
+        </div>
+        <p>No synchronized jobs. Uploaded files are staged, but cannot run until both motion plans pass preflight.</p>
+      </section>
+
+      <section class="grid status-grid" aria-label="System status">
+        <article class="card status-card">
+          <div class="card-heading">
+            <h2>ROS 2 / UR16e</h2>
+            <span id="ros-badge" class="badge">Connecting</span>
+          </div>
+          <dl>
+            <div><dt>Joint feedback</dt><dd id="joint-state">Waiting</dd></div>
+            <div><dt>Joint names</dt><dd id="joint-count">—</dd></div>
+          </dl>
+        </article>
+        <article class="card status-card">
+          <div class="card-heading">
+            <h2>Klipper</h2>
+            <span id="klipper-badge" class="badge">Connecting</span>
+          </div>
+          <dl>
+            <div><dt>State</dt><dd id="klipper-state">—</dd></div>
+            <div><dt>Extruder</dt><dd id="extruder-temp">—</dd></div>
+            <div><dt>Bed</dt><dd id="bed-temp">—</dd></div>
+          </dl>
+        </article>
+        <article class="card status-card job-status">
+          <div class="card-heading">
+            <h2>AxisForge</h2>
+            <span id="job-badge" class="badge">Idle</span>
+          </div>
+          <dl>
+            <div><dt>File</dt><dd id="job-name">No active job</dd></div>
+            <div><dt>Mode</dt><dd id="job-mode">—</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="grid controls-grid">
+        <article class="card">
+          <h2>AxisForge planning check</h2>
+          <p class="muted">Checks the staged G-code without moving hardware; it is not sync validation.</p>
+          <label for="job-select">G-code file</label>
+          <select id="job-select"><option value="">Loading jobs…</option></select>
+          <div id="jobs-message" class="inline-message" role="status"></div>
+          <div class="button-row">
+            <button id="start-job" class="button primary" disabled>Run planning check</button>
+            <button id="stop-job" class="button danger" disabled>Stop robot job</button>
+          </div>
+          <p id="job-message" class="inline-message" role="status"></p>
+        </article>
+
+        <article class="card">
+          <h2>Upload G-code</h2>
+          <p class="muted">Upload once to Moonraker and stage the same file for AxisForge. Upload does not start a print.</p>
+          <form id="upload-form">
+            <label for="gcode-upload">G-code file</label>
+            <input id="gcode-upload" name="file" type="file" accept=".gcode" required>
+            <button id="upload-job" class="button primary" type="submit">Upload to both</button>
+          </form>
+          <p id="upload-message" class="inline-message" role="status"></p>
+        </article>
+      </section>
+
+      <section class="card safety-card">
+        <div class="emergency-panel">
+          <div>
+            <strong>Emergency stop both systems</strong>
+            <p>Requests stop on both systems. Keep physical E-stops accessible.</p>
+          </div>
+          <button id="klipper-estop" class="button danger">E-stop both</button>
+        </div>
+        <p id="safety-message" class="inline-message" role="status"></p>
+      </section>
+    </main>
+    <footer>Keep the UR pendant and physical E-stop accessible.</footer>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
