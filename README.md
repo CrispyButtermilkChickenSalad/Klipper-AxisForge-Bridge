@@ -15,7 +15,7 @@ and Mainsail can still control Klipper directly: reserve non-emergency changes
 there for when no print is running. Their controls are not blocked by this
 warning; use emergency stops whenever needed.
 
-The [GitHub Pages launcher](https://crispybuttermilkchickensalad.github.io/Klipper-ROS2-Bridge/)
+The [GitHub Pages launcher](https://crispybuttermilkchickensalad.github.io/Klipper-AxisForge-Bridge/)
 is a static links page, not a ROS 2 or machine-control server.
 
 ## Linux dashboard
