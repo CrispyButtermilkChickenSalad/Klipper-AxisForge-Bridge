@@ -197,6 +197,14 @@ class DashboardApiTests(unittest.TestCase):
         self.assertTrue(self.moonraker.stopped)
         self.assertTrue(self.axisforge.stop_requested)
 
+    def test_ready_jobs_lists_only_jobs_that_passed_both_preflights(self):
+        with patch("bridge_dashboard.app.PreflightManager.ready_jobs",
+                   return_value=[{"job": "part.gcode", "sha256": "abc"}]) as ready:
+            response = self.client.get("/api/jobs/ready")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["jobs"], [{"job": "part.gcode", "sha256": "abc"}])
+        ready.assert_called_once_with(["part.gcode"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,7 +96,7 @@ select:focus, input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px r
 .check-row input { margin-top: 3px; accent-color: var(--purple); }
 .safety-check { padding: 12px; border: 1px solid rgba(251, 191, 36, .25); border-radius: 8px; background: rgba(251, 191, 36, .05); }
 .button-row, .input-row { display: flex; gap: 10px; }
-.button-row { margin-top: 18px; }
+.button-row { flex-wrap: wrap; margin-top: 18px; }
 .button { min-height: 40px; padding: 9px 13px; border: 1px solid transparent; border-radius: 8px; color: #f8fafc; font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; transition: filter .15s, transform .15s; }
 .button:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
 .button:disabled { opacity: .42; cursor: not-allowed; }

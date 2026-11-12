@@ -54,6 +54,18 @@ class PreflightManager:
         path = self.axisforge.job_path(job)
         return self._view(self._record_for(job, self._fingerprint(path)))
 
+    def ready_jobs(self, names):
+        """Jobs whose Klipper and robot preflights both passed for the current file."""
+        ready = []
+        for name in names:
+            try:
+                view = self.get(name)
+            except (AxisForgeError, OSError):
+                continue
+            if view["state"] == "preflight_passed":
+                ready.append({"job": name, "sha256": view["sha256"]})
+        return ready
+
     def _view(self, record):
         results = [record["klipper"], record["robot"]]
         if all(result is not None and result["passed"] for result in results):

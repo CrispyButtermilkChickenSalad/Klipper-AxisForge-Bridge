@@ -137,6 +137,22 @@ class PreflightTests(unittest.IsolatedAsyncioTestCase):
         self.path.write_bytes(GCODE + b"G1 X30\n")
         self.assertEqual(self.manager.get("part.gcode")["state"], "staged")
 
+    async def test_ready_jobs_requires_both_passes_on_current_file(self):
+        self.assertEqual(self.manager.ready_jobs(["part.gcode", "missing.gcode"]), [])
+        await self.manager.run_klipper("part.gcode")
+        self.assertEqual(self.manager.ready_jobs(["part.gcode"]), [])
+        await self.manager.run_robot("part.gcode")
+        ready = self.manager.ready_jobs(["part.gcode", "missing.gcode"])
+        self.assertEqual([item["job"] for item in ready], ["part.gcode"])
+        self.path.write_bytes(GCODE + b"G1 X30\n")
+        self.assertEqual(self.manager.ready_jobs(["part.gcode"]), [])
+
+    async def test_klipper_copy_mismatch_never_becomes_ready(self):
+        self.moonraker.remote = b"different"
+        await self.manager.run_klipper("part.gcode")
+        await self.manager.run_robot("part.gcode")
+        self.assertEqual(self.manager.ready_jobs(["part.gcode"]), [])
+
 
 if __name__ == "__main__":
     unittest.main()

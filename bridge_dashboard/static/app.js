@@ -11,6 +11,12 @@ function displayTemperature(value, target) {
   return `${Number(value).toFixed(1)} °C / ${Number(target || 0).toFixed(1)} °C`;
 }
 
+let latestSystemsReady = false;
+let latestAxisForgeIdle = false;
+let selectedPreflightState = null;
+let syncSnapshot = { state: "idle", armed: false, job: null };
+let syncActionInFlight = false;
+
 function showMessage(id, text, isError = false) {
   const element = byId(id);
   element.textContent = text && typeof text === "object" ? JSON.stringify(text) : (text || "");
@@ -34,6 +40,8 @@ async function refreshStatus() {
     const klipper = status.klipper;
     const job = status.axisforge;
     const allReady = ros.connected && klipper.connected && klipper.state === "ready";
+    latestSystemsReady = Boolean(allReady && ros.joint_state_fresh);
+    latestAxisForgeIdle = !job.running && !job.planning_check_running;
     byId("overall-dot").className = `dot ${allReady ? "good" : "bad"}`;
     byId("overall-state").textContent = allReady ? "Systems connected" : "Check system status";
 
@@ -67,9 +75,13 @@ async function refreshStatus() {
       : job.dry_run ? "Planning only" : "Live";
     byId("start-job").disabled = job.running || !ros.connected || !byId("job-select").value;
     byId("stop-job").disabled = !job.running;
+    updateSyncControls();
   } catch (error) {
     byId("overall-dot").className = "dot bad";
     byId("overall-state").textContent = error.message;
+    latestSystemsReady = false;
+    latestAxisForgeIdle = false;
+    updateSyncControls();
   }
 }
 
@@ -377,6 +389,7 @@ byId("job-select").addEventListener("change", () => {
 const PREFLIGHT_TEXT = { staged: "Not run", klipper_ok: "Klipper passed", robot_ok: "Robot passed", preflight_passed: "Both passed", failed: "Failed" };
 
 function renderPreflight(result) {
+  selectedPreflightState = result.state;
   const list = byId("preflight-checks");
   list.replaceChildren();
   for (const kind of ["klipper", "robot"]) {
@@ -392,11 +405,23 @@ function renderPreflight(result) {
     }
   }
   setBadge("preflight-badge", PREFLIGHT_TEXT[result.state], result.state === "preflight_passed" ? true : result.state === "failed" ? false : undefined);
+  updateSyncControls();
+}
+
+const PREFLIGHT_BUTTONS = ["preflight-klipper", "preflight-robot", "preflight-both"];
+let preflightInFlight = false;
+let readyJobs = [];
+
+function setPreflightButtons() {
+  const job = byId("job-select").value;
+  for (const id of PREFLIGHT_BUTTONS) byId(id).disabled = preflightInFlight || !job;
 }
 
 async function loadPreflight() {
   const job = byId("job-select").value;
-  for (const id of ["preflight-klipper", "preflight-robot"]) byId(id).disabled = !job;
+  selectedPreflightState = null;
+  setPreflightButtons();
+  updateSyncControls();
   showMessage("preflight-message", "");
   if (!job) {
     byId("preflight-checks").replaceChildren();
@@ -410,35 +435,102 @@ async function loadPreflight() {
   }
 }
 
-for (const kind of ["klipper", "robot"]) {
-  byId(`preflight-${kind}`).addEventListener("click", async () => {
-    const job = byId("job-select").value;
-    if (!job) return;
-    const buttons = [byId("preflight-klipper"), byId("preflight-robot")];
-    buttons.forEach((button) => { button.disabled = true; });
-    showMessage("preflight-message", kind === "robot" ? "Running the AxisForge planning check; this can take a while…" : "Checking Klipper…");
-    try {
-      renderPreflight(await request(`/api/jobs/${encodeURIComponent(job)}/preflight/${kind}`, { method: "POST" }));
-      showMessage("preflight-message", "");
-    } catch (error) {
-      showMessage("preflight-message", error.message, true);
-    } finally {
-      buttons.forEach((button) => { button.disabled = !byId("job-select").value; });
-    }
-  });
+async function loadReadyJobs() {
+  const select = byId("ready-select");
+  const previous = select.value;
+  try {
+    readyJobs = (await request("/api/jobs/ready")).jobs.map((item) => item.job);
+  } catch (error) {
+    readyJobs = [];
+  }
+  select.replaceChildren(new Option(readyJobs.length ? "Select a ready job…" : "No jobs ready", ""));
+  for (const job of readyJobs) select.add(new Option(job, job));
+  if (readyJobs.includes(previous)) select.value = previous;
+  else if (syncSnapshot.armed && readyJobs.includes(syncSnapshot.job)) select.value = syncSnapshot.job;
+  updateSyncControls();
 }
 
-for (const action of ["arm", "start", "abort"]) {
+async function runPreflights(kinds) {
+  const job = byId("job-select").value;
+  if (!job) return;
+  preflightInFlight = true;
+  setPreflightButtons();
+  try {
+    for (const kind of kinds) {
+      showMessage("preflight-message", kind === "robot"
+        ? "Running the AxisForge dry-run planning check; this can take a while…"
+        : "Checking Klipper…");
+      const result = await request(`/api/jobs/${encodeURIComponent(job)}/preflight/${kind}`, { method: "POST" });
+      renderPreflight(result);
+      if (!result[kind]?.passed) {
+        showMessage("preflight-message", `${kind === "robot" ? "Robot" : "Klipper"} preflight failed; see checks above.`, true);
+        return;
+      }
+    }
+    showMessage("preflight-message", selectedPreflightState === "preflight_passed"
+      ? `${job} passed on both machines and is listed under Ready to run.` : "");
+  } catch (error) {
+    showMessage("preflight-message", error.message, true);
+  } finally {
+    preflightInFlight = false;
+    setPreflightButtons();
+    await loadReadyJobs();
+  }
+}
+
+byId("preflight-klipper").addEventListener("click", () => runPreflights(["klipper"]));
+byId("preflight-robot").addEventListener("click", () => runPreflights(["robot"]));
+byId("preflight-both").addEventListener("click", () => runPreflights(["klipper", "robot"]));
+byId("ready-select").addEventListener("change", updateSyncControls);
+
+function updateSyncControls() {
+  const job = byId("ready-select").value;
+  const active = ["starting_robot", "robot_moving", "starting_klipper", "running"].includes(syncSnapshot.state);
+  const readyToArm = Boolean(job && latestSystemsReady && latestAxisForgeIdle && !active);
+  byId("sync-arm").disabled = syncActionInFlight || !readyToArm || syncSnapshot.armed;
+  byId("sync-start").disabled = syncActionInFlight || !latestSystemsReady || !latestAxisForgeIdle
+    || !syncSnapshot.armed || syncSnapshot.job !== job;
+  byId("sync-disarm").disabled = syncActionInFlight || !syncSnapshot.armed;
+  byId("sync-abort").disabled = syncActionInFlight || !active;
+  const badge = byId("sync-availability-badge");
+  const step = byId("step-sync");
+  if (active) {
+    badge.textContent = syncSnapshot.state.replaceAll("_", " ");
+    step.textContent = syncSnapshot.message || "Synchronized job in progress";
+  } else if (syncSnapshot.armed) {
+    badge.textContent = syncSnapshot.job === job ? "Armed" : "Another job is armed";
+    step.textContent = syncSnapshot.job === job
+      ? "Armed — start within 60 seconds" : `Disarm ${syncSnapshot.job} before selecting another job`;
+  } else if (job) {
+    badge.textContent = readyToArm ? "Ready to arm" : "Systems not ready";
+    step.textContent = readyToArm ? `${job} ready` : "Waiting for connected, idle systems";
+  } else {
+    badge.textContent = readyJobs.length ? `${readyJobs.length} job(s) ready` : "Preflight required";
+    step.textContent = readyJobs.length ? "Choose a ready job" : "Run both preflights";
+  }
+}
+
+for (const action of ["arm", "start", "disarm", "abort"]) {
   byId(`sync-${action}`).addEventListener("click", async () => {
-    const job = byId("job-select").value;
-    if (!job && action !== "abort") return showMessage("sync-message", "Select a job", true);
+    const job = byId("ready-select").value;
+    if (!job && action !== "abort") return showMessage("sync-message", "Select a ready job first.", true);
+    if (action === "start" && !window.confirm(
+      "This starts live AxisForge robot motion, then starts the Klipper print. Confirm the machine is clear, attended, and ready."
+    )) return;
+    syncActionInFlight = true;
+    updateSyncControls();
     try {
       const body = await request(`/api/sync/${action}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job }),
       });
-      showMessage("sync-message", `Sync: ${body.state} ${body.message}`);
+      syncSnapshot = body;
+      showMessage("sync-message", `Sync: ${body.state} ${body.message}`, body.state === "aborted" || body.state === "failed");
     } catch (error) {
       showMessage("sync-message", error.message, true);
+    } finally {
+      syncActionInFlight = false;
+      updateSyncControls();
+      refreshSync();
     }
   });
 }
@@ -446,8 +538,15 @@ for (const action of ["arm", "start", "abort"]) {
 async function refreshSync() {
   try {
     const body = await request("/api/sync/status");
-    showMessage("sync-message", `Sync: ${body.state} ${body.message}`, body.state === "aborted" || body.state === "failed");
-  } catch (error) { /* status refresh is best effort */ }
+    syncSnapshot = body;
+    if (body.armed && readyJobs.includes(body.job)) byId("ready-select").value = body.job;
+    if (!syncActionInFlight) {
+      showMessage("sync-message", `Sync: ${body.state} ${body.message}`, body.state === "aborted" || body.state === "failed");
+    }
+    updateSyncControls();
+  } catch (error) {
+    if (!syncActionInFlight) showMessage("sync-message", `Could not refresh sync state: ${error.message}`, true);
+  }
 }
 window.setInterval(refreshSync, 2000);
 
@@ -498,7 +597,8 @@ byId("klipper-estop").addEventListener("click", async () => {
   }
 });
 
-loadJobs().then(loadPreflight);
+loadJobs().then(loadPreflight).then(loadReadyJobs);
+window.setInterval(loadReadyJobs, 10000);
 loadLinks();
 refreshStatus();
 refreshTelemetry();

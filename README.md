@@ -14,7 +14,10 @@ emergency stops and stay with the machine.
 byte-identical to the AxisForge copy, G-code metadata present) and a robot
 preflight (rosbridge connected, fresh joint states, AxisForge idle, supported
 rotation axes, and a full AxisForge `dry_run` planning check). Results are tied
-to the file hash and discarded if the file changes. The robot performs all
+to the file hash and discarded if the file changes. **Run both preflights** runs
+the Klipper check, then the robot dry-run. A job appears under **Ready to run**
+(`GET /api/jobs/ready`) only when both passed for the same filename and the
+Klipper copy is byte-identical; arming and synchronized start use that list. The robot performs all
 motion: `X Y Z` are linear mm and `A/B/C` are absolute degrees about X/Y/Z;
 Klipper handles extrusion only. AxisForge must be the `rotary-axes-abc` fork
 branch (A/B/C as rotations about X/Y/Z); older AxisForge treated `A` as pitch.

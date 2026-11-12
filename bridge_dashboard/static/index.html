@@ -29,18 +29,18 @@
       <section class="card workflow-card" aria-label="G-code execution workflow">
         <div class="workflow-title">
           <h2>G-code job pipeline</h2>
-          <span class="badge">Sync bridge unavailable</span>
+          <span id="sync-availability-badge" class="badge">Select a job</span>
         </div>
         <ol class="workflow-steps">
           <li><span class="step-number">1</span><div><strong>Upload G-code</strong><p>Store on both systems</p></div></li>
           <li><span class="step-number">2</span><div><strong>Klipper preflight</strong><p id="step-klipper">Select a job</p></div></li>
           <li><span class="step-number">3</span><div><strong>Robot preflight</strong><p id="step-robot">Select a job</p></div></li>
-          <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p>Unavailable</p></div></li>
+          <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p id="step-sync">Run both preflights</p></div></li>
         </ol>
-        <p class="pipeline-note">G-code upload, both preflights and synchronized start are available.</p>
+        <p class="pipeline-note">After both preflights pass, arm the selected job and explicitly confirm synchronized start. AxisForge moves first; Klipper starts after the configured delay.</p>
         <div class="calibration-row">
-          <div><strong>Timing calibration</strong><p>Requires Klipper-scheduled robot motion.</p></div>
-          <button class="button secondary" type="button" disabled>Unavailable</button>
+          <div><strong>Approach timing</strong><p>The configured Klipper delay must exceed the robot's approach move.</p></div>
+          <span class="badge">Configured on server</span>
         </div>
       </section>
 
@@ -63,14 +63,19 @@
         <p class="muted">Runs on the file chosen under AxisForge planning check. The robot performs all motion (X Y Z, plus A/B/C as rotation about X/Y/Z); Klipper handles extrusion only.</p>
         <div class="button-row">
           <button id="preflight-klipper" class="button secondary" type="button" disabled>Run Klipper preflight</button>
-          <button id="preflight-robot" class="button secondary" type="button" disabled>Run robot preflight</button>
+          <button id="preflight-robot" class="button secondary" type="button" disabled>Run robot dry-run preflight</button>
+          <button id="preflight-both" class="button primary" type="button" disabled>Run both preflights</button>
         </div>
         <ul id="preflight-checks" class="preflight-checks"></ul>
         <p id="preflight-message" class="inline-message" role="status"></p>
+        <label for="ready-select">Ready to run (both preflights passed, identical file on both machines)</label>
+        <select id="ready-select"><option value="">No jobs ready</option></select>
+        <p class="muted">Synchronized start causes live robot motion and starts the Klipper print. Confirm the machine is clear and attended before starting.</p>
         <div class="button-row">
-          <button id="sync-arm" class="button secondary" type="button">Arm (60 s)</button>
-          <button id="sync-start" class="button" type="button">Start synchronized job</button>
-          <button id="sync-abort" class="button danger" type="button">Abort both</button>
+          <button id="sync-arm" class="button secondary" type="button" disabled>Arm job (60 s)</button>
+          <button id="sync-start" class="button primary" type="button" disabled>Start synchronized job</button>
+          <button id="sync-disarm" class="button secondary" type="button" disabled>Disarm</button>
+          <button id="sync-abort" class="button danger" type="button" disabled>Abort both</button>
         </div>
         <p id="sync-message" class="inline-message" role="status">Sync: idle</p>
       </section>

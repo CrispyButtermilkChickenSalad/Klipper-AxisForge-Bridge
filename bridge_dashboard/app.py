@@ -82,6 +82,10 @@ def create_app(settings=None):
     async def jobs():
         return app.state.axisforge.list_jobs()
 
+    @app.get("/api/jobs/ready")
+    async def ready_jobs():
+        return {"jobs": app.state.preflight.ready_jobs(app.state.axisforge.list_jobs()["jobs"])}
+
     @app.get("/api/jobs/{job}/preflight")
     async def job_preflight(job: str):
         try:
