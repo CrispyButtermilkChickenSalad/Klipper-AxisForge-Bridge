@@ -1,10 +1,4 @@
-"""Synchronized start: arm, re-verify, robot first, then Klipper; any fault stops both.
-
-Order: the operator arms a job (short expiry), the bridge re-verifies both
-sides, starts AxisForge live, waits until it is running and stable for
-``klipper_delay_s`` (covers the approach move), then starts the Klipper print.
-A monitor stops both sides if either fails or stops early.
-"""
+"""Synchronized start is disabled until Klipper-timed robot following exists."""
 
 import asyncio
 import logging
@@ -15,6 +9,10 @@ from bridge_dashboard.moonraker import MoonrakerError
 
 logger = logging.getLogger(__name__)
 ARM_TTL_S = 60.0
+CONTROL_READY = False
+CONTROL_UNAVAILABLE = (
+    "Synchronized start is unavailable: Klipper-timed robot following is not implemented"
+)
 
 
 class SyncError(RuntimeError):
@@ -39,6 +37,7 @@ class SyncController:
             "state": self.state, "message": self.message, "job": self._job(),
             "armed": armed is not None,
             "armed_expires_in_s": None if armed is None else max(0.0, armed["expires"] - self.clock()),
+            "control_ready": CONTROL_READY,
         }
 
     def _job(self):
@@ -62,6 +61,8 @@ class SyncController:
         return record["sha256"]
 
     async def arm(self, job):
+        if not CONTROL_READY:
+            raise SyncError(CONTROL_UNAVAILABLE)
         if self._task and not self._task.done():
             raise SyncError("A synchronized job is already running")
         sha = await self._verify(job)
@@ -75,6 +76,8 @@ class SyncController:
             self.state, self.message = "idle", "Disarmed"
 
     async def start(self, job):
+        if not CONTROL_READY:
+            raise SyncError(CONTROL_UNAVAILABLE)
         armed = self._armed
         if not armed or armed["job"] != job or self.clock() > armed["expires"]:
             self._armed = None

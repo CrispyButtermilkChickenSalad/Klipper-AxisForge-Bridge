@@ -111,6 +111,10 @@ select:focus, input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px r
 .inline-message.error { color: #fda4af; }
 .inline-message.success { color: #86efac; }
 .preflight-checks { margin: 14px 0 0; padding: 0; list-style: none; font-size: .8rem; line-height: 1.6; }
+.preflight-progress { margin-top: 16px; }
+.preflight-progress[hidden] { display: none; }
+.preflight-progress label { margin: 0 0 8px; }
+.preflight-progress progress { display: block; width: 100%; height: 12px; accent-color: var(--purple); }
 .preflight-pass { color: #86efac; }
 .preflight-warn { color: #fcd34d; }
 .preflight-fail { color: #fda4af; }

@@ -35,12 +35,12 @@
           <li><span class="step-number">1</span><div><strong>Upload G-code</strong><p>Store on both systems</p></div></li>
           <li><span class="step-number">2</span><div><strong>Klipper preflight</strong><p id="step-klipper">Select a job</p></div></li>
           <li><span class="step-number">3</span><div><strong>Robot preflight</strong><p id="step-robot">Select a job</p></div></li>
-          <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p id="step-sync">Run both preflights</p></div></li>
+          <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p id="step-sync">Unavailable</p></div></li>
         </ol>
-        <p class="pipeline-note">After both preflights pass, arm the selected job and explicitly confirm synchronized start. AxisForge moves first; Klipper starts after the configured delay.</p>
+        <p class="pipeline-note">Synchronized start is disabled: Klipper-timed robot following is not implemented. Passing preflights does not make a job ready to print.</p>
         <div class="calibration-row">
-          <div><strong>Approach timing</strong><p>The configured Klipper delay must exceed the robot's approach move.</p></div>
-          <span class="badge">Configured on server</span>
+          <div><strong>Timing control</strong><p>Klipper-driven robot timing requires a validated motion follower.</p></div>
+          <span class="badge">Unavailable</span>
         </div>
       </section>
 
@@ -66,11 +66,16 @@
           <button id="preflight-robot" class="button secondary" type="button" disabled>Run robot dry-run preflight</button>
           <button id="preflight-both" class="button primary" type="button" disabled>Run both preflights</button>
         </div>
+        <div id="preflight-progress-container" class="preflight-progress" hidden>
+          <label for="preflight-progress" id="preflight-progress-label">Preflight progress</label>
+          <progress id="preflight-progress" aria-describedby="preflight-progress-detail"></progress>
+          <p id="preflight-progress-detail" class="chart-caption" role="status"></p>
+        </div>
         <ul id="preflight-checks" class="preflight-checks"></ul>
         <p id="preflight-message" class="inline-message" role="status"></p>
-        <label for="ready-select">Ready to run (both preflights passed, identical file on both machines)</label>
-        <select id="ready-select"><option value="">No jobs ready</option></select>
-        <p class="muted">Synchronized start causes live robot motion and starts the Klipper print. Confirm the machine is clear and attended before starting.</p>
+        <label for="ready-select">Preflight passed (not ready to print)</label>
+        <select id="ready-select"><option value="">No jobs passed both preflights</option></select>
+        <p class="muted">Live start is unavailable until Klipper-timed robot control is implemented and validated.</p>
         <div class="button-row">
           <button id="sync-arm" class="button secondary" type="button" disabled>Arm job (60 s)</button>
           <button id="sync-start" class="button primary" type="button" disabled>Start synchronized job</button>

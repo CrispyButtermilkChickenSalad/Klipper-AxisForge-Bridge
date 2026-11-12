@@ -130,6 +130,14 @@ class DashboardApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(self.axisforge.started, [])
 
+    def test_synchronized_live_start_is_unavailable(self):
+        self.assertFalse(self.client.get("/api/sync/status").json()["control_ready"])
+        for action in ("arm", "start"):
+            response = self.client.post(f"/api/sync/{action}", json={"job": "part.gcode"})
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("Klipper-timed robot following", response.json()["detail"])
+        self.assertEqual(self.axisforge.started, [])
+
     def test_planning_check_starts_without_live_motion(self):
         response = self.client.post(
             "/api/axisforge/start",

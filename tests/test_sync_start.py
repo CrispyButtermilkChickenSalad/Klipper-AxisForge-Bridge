@@ -62,63 +62,29 @@ class SyncTest(unittest.IsolatedAsyncioTestCase):
         self.sync = SyncController(self.mr, FakeRos(), self.af, self.pre,
                                    klipper_delay_s=0.05, poll_s=0.01)
 
-    async def test_start_requires_arming(self):
-        with self.assertRaises(SyncError):
-            await self.sync.start("a.gcode")
-
-    async def test_arm_requires_passed_preflight(self):
-        self.pre.state = "robot_ok"
-        with self.assertRaises(SyncError):
-            await self.sync.arm("a.gcode")
-
-    async def test_robot_starts_before_klipper(self):
-        await self.sync.arm("a.gcode")
-        await self.sync.start("a.gcode")
-        self.assertTrue(self.af.running)
+    async def test_passing_preflight_cannot_arm_or_start(self):
+        self.assertFalse(self.sync.status()["control_ready"])
+        for operation in (self.sync.arm, self.sync.start):
+            with self.assertRaisesRegex(SyncError, "Klipper-timed robot following"):
+                await operation("a.gcode")
+        self.assertFalse(self.af.running)
         self.assertEqual(self.mr.started, [])
-        await self.wait_for(lambda: self.mr.started)
-        self.assertEqual(self.mr.started, ["a.gcode"])
-        self.af.running, self.af.code, self.mr.snapshot["print_state"] = False, 0, "complete"
-        await self.wait_for(lambda: self.sync.state == "complete")
 
-    async def test_robot_dying_before_klipper_stops_both(self):
-        await self.sync.arm("a.gcode")
-        await self.sync.start("a.gcode")
-        self.af.running, self.af.code = False, 1
-        await self.wait_for(lambda: self.sync.state == "aborted")
-        self.assertEqual(self.mr.started, [])
-        self.assertEqual(self.mr.cancels, 1)
-
-    async def test_klipper_fault_stops_robot(self):
-        await self.sync.arm("a.gcode")
-        await self.sync.start("a.gcode")
-        await self.wait_for(lambda: self.mr.started)
-        self.mr.snapshot["state"] = "shutdown"
-        await self.wait_for(lambda: self.sync.state == "aborted")
-        self.assertGreaterEqual(self.af.stops, 1)
-
-    async def test_file_change_after_arm_rejected(self):
-        await self.sync.arm("a.gcode")
-        self.pre.sha = "changed"
-        with self.assertRaises(SyncError):
+    async def test_existing_arm_cannot_bypass_disabled_start(self):
+        self.sync._armed = {
+            "job": "a.gcode", "sha256": "abc", "expires": self.sync.clock() + 60,
+        }
+        with self.assertRaisesRegex(SyncError, "Klipper-timed robot following"):
             await self.sync.start("a.gcode")
         self.assertFalse(self.af.running)
+        self.assertEqual(self.mr.started, [])
 
-    async def test_arm_expires(self):
-        now = [0.0]
-        sync = SyncController(self.mr, FakeRos(), self.af, self.pre, clock=lambda: now[0])
-        await sync.arm("a.gcode")
-        now[0] = 61
-        with self.assertRaises(SyncError):
-            await sync.start("a.gcode")
-
-    async def wait_for(self, condition):
-        import asyncio
-        for _ in range(300):
-            if condition():
-                return
-            await asyncio.sleep(0.01)
-        self.fail("condition not reached")
+    async def test_abort_remains_available(self):
+        self.af.running = True
+        result = await self.sync.abort()
+        self.assertEqual(result["state"], "aborted")
+        self.assertEqual(self.af.stops, 1)
+        self.assertEqual(self.mr.cancels, 1)
 
 
 if __name__ == "__main__":
