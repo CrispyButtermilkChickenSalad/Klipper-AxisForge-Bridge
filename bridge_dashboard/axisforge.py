@@ -3,11 +3,17 @@
 import asyncio
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 
 logger = logging.getLogger(__name__)
+
+PREFLIGHT_SUMMARY = re.compile(
+    r"Preflight passed: (?P<segments>\d+) source segments, (?P<actions>\d+) actions; "
+    r"nominal motion/dwell time (?P<duration>[\d.]+) s, positive E total (?P<filament>[\d.]+) mm"
+)
 
 
 class AxisForgeError(RuntimeError):
@@ -22,6 +28,7 @@ class AxisForgeRunner:
         self._process = None
         self._job_name = None
         self._dry_run = None
+        self._preflighting = False
         self._lock = asyncio.Lock()
 
     def list_jobs(self):
@@ -94,20 +101,63 @@ class AxisForgeRunner:
                 os.unlink(temporary_path)
         return destination
 
+    def _command(self, path, dry_run):
+        command = [
+            self.settings.ros2_command,
+            "launch",
+            self.settings.launch_package,
+            self.settings.launch_file,
+        ]
+        if self.settings.axisforge_config is not None:
+            command.append(f"config:={self.settings.axisforge_config}")
+        command.extend((f"file:={path}", f"dry_run:={'true' if dry_run else 'false'}"))
+        return command
+
+    def job_path(self, name):
+        return self._resolve_job(name)
+
+    async def preflight(self, name, timeout_s=300):
+        """Run AxisForge's full planning check and capture its result.
+
+        The shared lock is not held while planning, so a stop request is never delayed.
+        """
+        async with self._lock:
+            if self._preflighting or (self._process is not None and self._process.poll() is None):
+                raise AxisForgeError("An AxisForge job or planning check is already running")
+            command = self._command(self._resolve_job(name), True)
+            self._preflighting = True
+        try:
+            completed = await asyncio.to_thread(
+                subprocess.run, command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, errors="replace",
+                timeout=timeout_s, shell=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise AxisForgeError(f"AxisForge planning check timed out after {timeout_s} s") from error
+        except OSError as error:
+            raise AxisForgeError(f"Could not run AxisForge planning check: {error}") from error
+        finally:
+            self._preflighting = False
+        output = completed.stdout or ""
+        summary = PREFLIGHT_SUMMARY.search(output)
+        return {
+            "passed": completed.returncode == 0 and summary is not None and "DRY RUN complete" in output,
+            "return_code": completed.returncode,
+            "summary": None if summary is None else {
+                "source_segments": int(summary["segments"]),
+                "actions": int(summary["actions"]),
+                "duration_s": float(summary["duration"]),
+                "extrusion_mm": float(summary["filament"]),
+            },
+            "output": output.splitlines()[-15:],
+        }
+
     async def start(self, name, dry_run=False):
         async with self._lock:
-            if self._process is not None and self._process.poll() is None:
-                raise AxisForgeError("An AxisForge job is already running")
+            if self._preflighting or (self._process is not None and self._process.poll() is None):
+                raise AxisForgeError("An AxisForge job or planning check is already running")
             path = self._resolve_job(name)
-            command = [
-                self.settings.ros2_command,
-                "launch",
-                self.settings.launch_package,
-                self.settings.launch_file,
-            ]
-            if self.settings.axisforge_config is not None:
-                command.append(f"config:={self.settings.axisforge_config}")
-            command.extend((f"file:={path}", f"dry_run:={'true' if dry_run else 'false'}"))
+            command = self._command(path, dry_run)
             try:
                 self._process = subprocess.Popen(
                     command,
@@ -146,5 +196,6 @@ class AxisForgeRunner:
             "running": running,
             "job": self._job_name,
             "dry_run": self._dry_run,
+            "planning_check_running": self._preflighting,
             "return_code": None if running or self._process is None else self._process.returncode,
         }

@@ -42,6 +42,7 @@ class Settings:
     launch_package: str
     launch_file: str
     ros2_command: str
+    sync_klipper_delay_s: float = 10.0
 
     @classmethod
     def from_env(cls):
@@ -70,4 +71,5 @@ class Settings:
             launch_package=os.getenv("AXISFORGE_LAUNCH_PACKAGE", "axisforge_bringup"),
             launch_file=os.getenv("AXISFORGE_LAUNCH_FILE", "ur_master.launch.py"),
             ros2_command=os.getenv("ROS2_COMMAND", "ros2"),
+            sync_klipper_delay_s=float(os.getenv("SYNC_KLIPPER_DELAY_S", "10")),
         )

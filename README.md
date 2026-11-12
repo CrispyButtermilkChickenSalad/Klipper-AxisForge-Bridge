@@ -9,6 +9,35 @@ and ALPS Logger. Its experimental Klipper exporter is read-only.
 does not start a print, and the dashboard is not a safety system. Use physical
 emergency stops and stay with the machine.
 
+**Preflight.** For each staged job the dashboard can run a Klipper preflight
+(Klippy ready, printer idle, extruder able to extrude, the Klipper copy
+byte-identical to the AxisForge copy, G-code metadata present) and a robot
+preflight (rosbridge connected, fresh joint states, AxisForge idle, supported
+rotation axes, and a full AxisForge `dry_run` planning check). Results are tied
+to the file hash and discarded if the file changes. The robot performs all
+motion: `X Y Z` are linear mm and `A/B/C` are absolute degrees about X/Y/Z;
+Klipper handles extrusion only. AxisForge must be the `rotary-axes-abc` fork
+branch (A/B/C as rotations about X/Y/Z); older AxisForge treated `A` as pitch.
+
+**Synchronized start.** `POST /api/sync/arm` re-verifies both sides and arms the
+job for 60 s; `POST /api/sync/start` re-verifies (file hash unchanged), starts
+AxisForge live, waits `SYNC_KLIPPER_DELAY_S` (default 10 s, must exceed AxisForge's
+approach move) while confirming the robot is still running, then starts the
+Klipper print via Moonraker. If either side faults or exits early, both are
+stopped (`/api/sync/abort` does this on demand). Robot and Klipper run the same
+file independently; Klipper ignores `A/B/C`. Real-time following of Klipper by the
+robot (`robot_motion_bridge` + `orientation_index`) is not wired in yet.
+
+**Commissioning checklist (do with the arm in a safe state, hand on the e-stop).**
+1. Confirm who extrudes: AxisForge also drives extrusion by default
+   (`extrusion_scale_factor` in `ur_master.yaml`). If Klipper extrudes, set it to 0
+   or the job will double-extrude.
+2. Run a dry run, then both preflights, on a short A/B/C test file with the nozzle
+   clear of the bed (high `z_offset`) and Klipper heaters off.
+3. Run a synchronized start with the extruder cold-locked/no filament; watch that
+   the robot approaches before Klipper begins and that Abort stops both.
+4. Tune `SYNC_KLIPPER_DELAY_S`, then print.
+
 The bridge does not coordinate live parameter changes. Its toolhead telemetry
 cannot change heater targets, fans, macros, speed or extrusion factor. Fluidd
 and Mainsail can still control Klipper directly: reserve non-emergency changes

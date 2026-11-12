@@ -4,6 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -13,7 +14,9 @@ from pydantic import BaseModel
 from bridge_dashboard.axisforge import AxisForgeError, AxisForgeRunner
 from bridge_dashboard.config import Settings
 from bridge_dashboard.moonraker import MoonrakerClient, MoonrakerError
+from bridge_dashboard.preflight import PreflightManager
 from bridge_dashboard.rosbridge import RosBridge
+from bridge_dashboard.sync_start import SyncController, SyncError
 
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
@@ -34,6 +37,13 @@ def create_app(settings=None):
         )
         app.state.rosbridge = RosBridge(settings.rosbridge_url)
         app.state.axisforge = AxisForgeRunner(settings)
+        app.state.preflight = PreflightManager(
+            app.state.moonraker, app.state.rosbridge, app.state.axisforge
+        )
+        app.state.sync = SyncController(
+            app.state.moonraker, app.state.rosbridge, app.state.axisforge,
+            app.state.preflight, klipper_delay_s=settings.sync_klipper_delay_s,
+        )
         try:
             await app.state.rosbridge.start()
             yield
@@ -72,6 +82,21 @@ def create_app(settings=None):
     async def jobs():
         return app.state.axisforge.list_jobs()
 
+    @app.get("/api/jobs/{job}/preflight")
+    async def job_preflight(job: str):
+        try:
+            return app.state.preflight.get(job)
+        except (AxisForgeError, OSError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.post("/api/jobs/{job}/preflight/{target}")
+    async def run_job_preflight(job: str, target: Literal["klipper", "robot"]):
+        run = getattr(app.state.preflight, f"run_{target}")
+        try:
+            return await run(job)
+        except (AxisForgeError, OSError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
     @app.post("/api/jobs/upload")
     async def upload_job(file: UploadFile = File(...)):
         if not file.filename:
@@ -101,7 +126,7 @@ def create_app(settings=None):
                 "ready": False,
                 "message": (
                     "Uploaded to Klipper and staged for AxisForge; "
-                    "synchronized preflight is not available yet"
+                    "run the Klipper and robot preflights before starting"
                 ),
             }
 
@@ -131,6 +156,26 @@ def create_app(settings=None):
             return await app.state.axisforge.start(request.job, request.dry_run)
         except AxisForgeError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+
+    @app.get("/api/sync/status")
+    async def sync_status():
+        return app.state.sync.status()
+
+    @app.post("/api/sync/{action}")
+    async def sync_action(action: Literal["arm", "start", "disarm", "abort"],
+                          request: StartJobRequest | None = None):
+        sync = app.state.sync
+        try:
+            if action == "disarm":
+                sync.disarm()
+                return sync.status()
+            if action == "abort":
+                return await sync.abort()
+            if request is None:
+                raise HTTPException(status_code=400, detail="job is required")
+            return await (sync.arm if action == "arm" else sync.start)(request.job)
+        except (SyncError, AxisForgeError, OSError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
     @app.post("/api/axisforge/stop")
     async def stop_axisforge():

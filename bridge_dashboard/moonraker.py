@@ -1,5 +1,8 @@
 """Small Moonraker HTTP client for status and deliberate supervisory commands."""
 
+import hashlib
+from urllib.parse import quote
+
 import httpx
 
 
@@ -194,6 +197,79 @@ class MoonrakerClient:
             "history": history,
             "history_error": history_error,
         }
+
+    async def printer_snapshot(self):
+        """Read the Klipper state needed by preflight; never sends commands."""
+        try:
+            listing = (await self._get("/printer/objects/list")).get("objects")
+            if not isinstance(listing, list):
+                raise ValueError("invalid object list")
+            wanted = [name for name in ("webhooks", "print_stats", "extruder") if name in listing]
+            status = (await self._get("/printer/objects/query", [(n, "") for n in wanted]))["status"]
+        except (httpx.HTTPError, ValueError, KeyError, AttributeError) as error:
+            raise MoonrakerError(f"Moonraker preflight query failed: {error}") from error
+        extruder = status.get("extruder")
+        return {
+            "state": status.get("webhooks", {}).get("state", "unknown"),
+            "state_message": status.get("webhooks", {}).get("state_message", ""),
+            "print_state": status.get("print_stats", {}).get("state"),
+            "extruder": None if not isinstance(extruder, dict) else {
+                "can_extrude": extruder.get("can_extrude"),
+                "temperature": extruder.get("temperature"),
+                "target": extruder.get("target"),
+            },
+            "exporter_loaded": "robot_motion_bridge" in listing,
+        }
+
+    async def _get(self, path, params=None):
+        response = await self._client.get(path, params=params)
+        response.raise_for_status()
+        return response.json()["result"]
+
+    async def file_metadata(self, filename):
+        """Return Moonraker's parsed G-code metadata, or None if the file is absent."""
+        try:
+            response = await self._client.get(
+                "/server/files/metadata", params={"filename": filename}
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            result = response.json()["result"]
+            if not isinstance(result, dict):
+                raise ValueError("invalid metadata")
+            return result
+        except (httpx.HTTPError, ValueError, KeyError) as error:
+            raise MoonrakerError(f"Moonraker G-code metadata request failed: {error}") from error
+
+    async def file_sha256(self, filename):
+        """Hash the copy of a G-code file stored on Klipper, or None if absent."""
+        digest = hashlib.sha256()
+        try:
+            async with self._client.stream(
+                "GET", f"/server/files/gcodes/{quote(filename)}"
+            ) as response:
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes():
+                    digest.update(chunk)
+        except httpx.HTTPError as error:
+            raise MoonrakerError(f"Moonraker G-code download failed: {error}") from error
+        return digest.hexdigest()
+
+    async def start_print(self, filename):
+        await self._post("/printer/print/start", {"filename": filename}, "start print")
+
+    async def cancel_print(self):
+        await self._post("/printer/print/cancel", None, "cancel print")
+
+    async def _post(self, path, params, action):
+        try:
+            response = await self._client.post(path, params=params)
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise MoonrakerError(f"Klipper {action} failed: {error}") from error
 
     async def emergency_stop(self):
         try:
