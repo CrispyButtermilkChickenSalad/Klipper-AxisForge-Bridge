@@ -369,7 +369,87 @@ byId("start-job").addEventListener("click", async () => {
   }
 });
 
-byId("job-select").addEventListener("change", refreshStatus);
+byId("job-select").addEventListener("change", () => {
+  refreshStatus();
+  loadPreflight();
+});
+
+const PREFLIGHT_TEXT = { staged: "Not run", klipper_ok: "Klipper passed", robot_ok: "Robot passed", preflight_passed: "Both passed", failed: "Failed" };
+
+function renderPreflight(result) {
+  const list = byId("preflight-checks");
+  list.replaceChildren();
+  for (const kind of ["klipper", "robot"]) {
+    const outcome = result[kind];
+    byId(`step-${kind}`).textContent = outcome ? (outcome.passed ? "Passed" : "Failed") : "Not run";
+    if (!outcome) continue;
+    for (const check of outcome.checks) {
+      const item = document.createElement("li");
+      const mark = { pass: "✓", warn: "!", fail: "✗" }[check.status];
+      item.className = `preflight-${check.status}`;
+      item.textContent = `${mark} ${kind === "klipper" ? "Klipper" : "Robot"} — ${check.name}: ${check.detail}`;
+      list.append(item);
+    }
+  }
+  setBadge("preflight-badge", PREFLIGHT_TEXT[result.state], result.state === "preflight_passed" ? true : result.state === "failed" ? false : undefined);
+}
+
+async function loadPreflight() {
+  const job = byId("job-select").value;
+  for (const id of ["preflight-klipper", "preflight-robot"]) byId(id).disabled = !job;
+  showMessage("preflight-message", "");
+  if (!job) {
+    byId("preflight-checks").replaceChildren();
+    for (const kind of ["klipper", "robot"]) byId(`step-${kind}`).textContent = "Select a job";
+    return setBadge("preflight-badge", "No job selected");
+  }
+  try {
+    renderPreflight(await request(`/api/jobs/${encodeURIComponent(job)}/preflight`));
+  } catch (error) {
+    showMessage("preflight-message", error.message, true);
+  }
+}
+
+for (const kind of ["klipper", "robot"]) {
+  byId(`preflight-${kind}`).addEventListener("click", async () => {
+    const job = byId("job-select").value;
+    if (!job) return;
+    const buttons = [byId("preflight-klipper"), byId("preflight-robot")];
+    buttons.forEach((button) => { button.disabled = true; });
+    showMessage("preflight-message", kind === "robot" ? "Running the AxisForge planning check; this can take a while…" : "Checking Klipper…");
+    try {
+      renderPreflight(await request(`/api/jobs/${encodeURIComponent(job)}/preflight/${kind}`, { method: "POST" }));
+      showMessage("preflight-message", "");
+    } catch (error) {
+      showMessage("preflight-message", error.message, true);
+    } finally {
+      buttons.forEach((button) => { button.disabled = !byId("job-select").value; });
+    }
+  });
+}
+
+for (const action of ["arm", "start", "abort"]) {
+  byId(`sync-${action}`).addEventListener("click", async () => {
+    const job = byId("job-select").value;
+    if (!job && action !== "abort") return showMessage("sync-message", "Select a job", true);
+    try {
+      const body = await request(`/api/sync/${action}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job }),
+      });
+      showMessage("sync-message", `Sync: ${body.state} ${body.message}`);
+    } catch (error) {
+      showMessage("sync-message", error.message, true);
+    }
+  });
+}
+
+async function refreshSync() {
+  try {
+    const body = await request("/api/sync/status");
+    showMessage("sync-message", `Sync: ${body.state} ${body.message}`, body.state === "aborted" || body.state === "failed");
+  } catch (error) { /* status refresh is best effort */ }
+}
+window.setInterval(refreshSync, 2000);
 
 byId("upload-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -385,7 +465,7 @@ byId("upload-form").addEventListener("submit", async (event) => {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.detail || `Upload failed (${response.status})`);
     byId("gcode-upload").value = "";
-    showMessage("upload-message", `${body.job} uploaded. It is not ready to run until synchronized preflight is implemented.`);
+    showMessage("upload-message", `${body.job} uploaded. Run the Klipper and robot preflights before starting.`);
     await loadJobs();
   } catch (error) {
     showMessage("upload-message", error.message, true);
@@ -418,7 +498,7 @@ byId("klipper-estop").addEventListener("click", async () => {
   }
 });
 
-loadJobs();
+loadJobs().then(loadPreflight);
 loadLinks();
 refreshStatus();
 refreshTelemetry();

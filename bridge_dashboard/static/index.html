@@ -33,11 +33,11 @@
         </div>
         <ol class="workflow-steps">
           <li><span class="step-number">1</span><div><strong>Upload G-code</strong><p>Store on both systems</p></div></li>
-          <li><span class="step-number">2</span><div><strong>Klipper preflight</strong><p>Not implemented</p></div></li>
-          <li><span class="step-number">3</span><div><strong>Robot preflight</strong><p>Not implemented</p></div></li>
+          <li><span class="step-number">2</span><div><strong>Klipper preflight</strong><p id="step-klipper">Select a job</p></div></li>
+          <li><span class="step-number">3</span><div><strong>Robot preflight</strong><p id="step-robot">Select a job</p></div></li>
           <li><span class="step-number">4</span><div><strong>Synchronized start</strong><p>Unavailable</p></div></li>
         </ol>
-        <p class="pipeline-note">G-code upload is available. Robot preflight and synchronized execution are still being built.</p>
+        <p class="pipeline-note">G-code upload, both preflights and synchronized start are available.</p>
         <div class="calibration-row">
           <div><strong>Timing calibration</strong><p>Requires Klipper-scheduled robot motion.</p></div>
           <button class="button secondary" type="button" disabled>Unavailable</button>
@@ -55,12 +55,24 @@
         <p id="upload-message" class="inline-message" role="status"></p>
       </section>
 
-      <section class="card queue-card" aria-label="Prepared jobs">
+      <section class="card queue-card" aria-label="Job preflight">
         <div class="card-heading">
-          <h2>Ready jobs</h2>
-          <span class="badge">Unavailable</span>
+          <h2>Job preflight</h2>
+          <span id="preflight-badge" class="badge">No job selected</span>
         </div>
-        <p>No synchronized jobs. Uploaded files are staged, but cannot run until both motion plans pass preflight.</p>
+        <p class="muted">Runs on the file chosen under AxisForge planning check. The robot performs all motion (X Y Z, plus A/B/C as rotation about X/Y/Z); Klipper handles extrusion only.</p>
+        <div class="button-row">
+          <button id="preflight-klipper" class="button secondary" type="button" disabled>Run Klipper preflight</button>
+          <button id="preflight-robot" class="button secondary" type="button" disabled>Run robot preflight</button>
+        </div>
+        <ul id="preflight-checks" class="preflight-checks"></ul>
+        <p id="preflight-message" class="inline-message" role="status"></p>
+        <div class="button-row">
+          <button id="sync-arm" class="button secondary" type="button">Arm (60 s)</button>
+          <button id="sync-start" class="button" type="button">Start synchronized job</button>
+          <button id="sync-abort" class="button danger" type="button">Abort both</button>
+        </div>
+        <p id="sync-message" class="inline-message" role="status">Sync: idle</p>
       </section>
 
       <section class="grid status-grid" aria-label="System status">
