@@ -29,6 +29,10 @@ Full documentation is in the **[wiki](https://github.com/CrispyButtermilkChicken
 Protocol, clock profiles, heartbeats, corner policies and pressure advance:
 [docs/synchronized-jobs.md](docs/synchronized-jobs.md).
 
+The [dashboard setup and job guide](docs/dashboard-guide.md) covers adjustable
+homing and mesh speeds, 2×2 through 9×9 grids, bed dimensions and bounds,
+ALPS calibration jogging, versioned uploads and start/end G-code compatibility.
+
 ## Quick start
 
 Use matching versions of this repo and
