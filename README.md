@@ -70,3 +70,5 @@ python -m pytest tests --ignore-glob="tests/browser_*"
 
 Run on Linux (several tests use POSIX-only calls). Automated tests do not establish
 physical synchronization accuracy; robot tests live in AxisForge.
+
+Clock-alignment validation is still incomplete; see the [current validation status](docs/synchronized-jobs.md#current-validation-status--17-november-2026).
